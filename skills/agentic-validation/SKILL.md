@@ -120,4 +120,9 @@ When the user only wants a normal response, still use the workflow internally an
 
 ## When the Python package is available
 
-If you are operating in this repository or `agentic_validation` is installed, prefer the package implementation over recreating the loop manually. The public entry point is the synchronous function `run_agent(task: TaskInput) -> AgentResult`, which accepts a fully populated `TaskInput` and returns the final structured result directly.
+If you are operating in this repository or `agentic_validation` is installed,
+prefer the package implementation over recreating the loop manually.
+
+The public entry point is the synchronous function
+`run_agent(task: TaskInput) -> AgentResult`. It accepts a populated `TaskInput`
+and returns the final structured result directly.

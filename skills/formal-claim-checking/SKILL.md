@@ -63,7 +63,7 @@ Unknown is a valid outcome. Prefer `unknown` over a guessed pass.
 
 ## When the Python package is available
 
-If you are inside this repository or the package is installed, prefer the existing checker implementations instead of re-creating them manually:
+If you are inside this repository or the package is installed, prefer the existing checker implementations instead of recreating them manually:
 
 - `agentic_validation.checkers.SMTChecker`
 - `agentic_validation.checkers.LeanChecker`
