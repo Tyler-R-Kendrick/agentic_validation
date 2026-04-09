@@ -475,6 +475,14 @@ class TestLeanChecker:
 
         assert self.checker._resolve_command() == ["lean"]
 
+    def test_resolve_command_returns_none_when_nothing_available(self, monkeypatch):
+        monkeypatch.setattr(
+            "agentic_validation.checkers.lean_checker.shutil.which",
+            lambda name: None,
+        )
+
+        assert self.checker._resolve_command() is None
+
     def test_os_error_returns_unknown(self, monkeypatch):
         claim = _claim(target="lean", expression="True")
         monkeypatch.setattr(self.checker, "_resolve_command", lambda: ["lean"])
