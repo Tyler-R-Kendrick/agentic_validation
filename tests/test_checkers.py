@@ -3,6 +3,7 @@
 import pytest
 
 from agentic_validation.checkers import LeanChecker, SMTChecker
+from agentic_validation.checkers.smt_checker import _validate_expression
 from agentic_validation.schemas import CheckerResult, FormalClaim, ReasoningStep
 
 
@@ -81,6 +82,16 @@ class TestSMTChecker:
         result = self.checker.check(claim, [], [])
         assert result.status == "unknown"
 
+    def test_disallowed_expression_returns_unknown(self):
+        """Expressions with disallowed constructs must be rejected."""
+        claim = _claim(
+            target="smt",
+            expression="__import__('os').system('echo pwned')",
+        )
+        result = self.checker.check(claim, [], [])
+        assert result.status == "unknown"
+        assert "disallowed" in result.message.lower()
+
     def test_result_type(self):
         claim = _claim(target="smt", expression="GT(Int(1), Int(0))")
         result = self.checker.check(claim, [], [])
@@ -96,6 +107,36 @@ class TestSMTChecker:
         assumptions = ["GT(Symbol('x', INT), Int(0))"]
         result = self.checker.check(claim, assumptions, [])
         assert result.status in ("passed", "unknown")
+
+
+# ---------------------------------------------------------------------------
+# Expression validator tests
+# ---------------------------------------------------------------------------
+
+class TestValidateExpression:
+    def test_simple_comparison_valid(self):
+        assert _validate_expression("GT(Int(1), Int(0))") is True
+
+    def test_nested_expression_valid(self):
+        assert _validate_expression("And(GT(Int(2), Int(1)), LE(Int(0), Int(5)))") is True
+
+    def test_symbol_with_type_valid(self):
+        assert _validate_expression("Symbol('x', INT)") is True
+
+    def test_import_disallowed(self):
+        assert _validate_expression("__import__('os')") is False
+
+    def test_attribute_access_disallowed(self):
+        assert _validate_expression("os.system('echo x')") is False
+
+    def test_unknown_name_disallowed(self):
+        assert _validate_expression("FakeFunc(Int(1))") is False
+
+    def test_empty_string_invalid(self):
+        assert _validate_expression("") is False
+
+    def test_bytes_literal_disallowed(self):
+        assert _validate_expression("b'hello'") is False
 
 
 # ---------------------------------------------------------------------------

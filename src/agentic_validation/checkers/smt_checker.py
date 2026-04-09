@@ -7,22 +7,87 @@ Design notes
 ------------
 * Claims whose formal_expression is None or whose formalization_target is not
   "smt" are returned immediately with status "unknown".
-* The formal_expression is evaluated in a sandbox that exposes a minimal set of
-  pySMT constructors (Symbol, Int, Real, Bool, Plus, Minus, Times, Equals,
-  GE, GT, LE, LT, And, Or, Not, Implies, ForAll, Exists).
+* The formal_expression is parsed via the Python AST before execution to ensure
+  it consists only of safe, whitelisted pySMT constructor calls and literals.
+  This prevents arbitrary code execution from LM-generated expressions.
 * Assumptions are rendered as additional pySMT assertions.
-* The exact solver query (serialized as SMTLIB2) is stored in the returned
-  CheckerResult so that every call is replayable.
+* The exact solver query is stored in the returned CheckerResult so every call
+  is replayable.
 """
 
 from __future__ import annotations
 
+import ast
 import logging
 from typing import Any
 
 from ..schemas import CheckerResult, FormalClaim, ReasoningStep
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Allowed identifiers in SMT expressions (whitelist)
+# ---------------------------------------------------------------------------
+
+_ALLOWED_NAMES = frozenset(
+    {
+        # Constructors
+        "Symbol", "Int", "Real", "Bool",
+        # Arithmetic
+        "Plus", "Minus", "Times",
+        # Comparison
+        "Equals", "GE", "GT", "LE", "LT",
+        # Boolean
+        "And", "Or", "Not", "Implies",
+        # Constants
+        "TRUE", "FALSE",
+        # Types
+        "INT", "REAL", "BOOL",
+    }
+)
+
+# ---------------------------------------------------------------------------
+# AST-based expression validator
+# ---------------------------------------------------------------------------
+
+
+def _validate_expression(expr: str) -> bool:
+    """Return True iff *expr* consists only of whitelisted pySMT identifiers.
+
+    Allowed nodes: function calls, names in _ALLOWED_NAMES, integer literals,
+    float literals, string literals (for Symbol names), and tuples/lists of
+    the above.  Any other construct (attribute access, subscript, import,
+    exec, etc.) causes rejection.
+    """
+    try:
+        tree = ast.parse(expr, mode="eval")
+    except SyntaxError:
+        return False
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Expression):
+            continue
+        if isinstance(node, ast.Call):
+            # Function must be a bare name in the whitelist
+            if not isinstance(node.func, ast.Name):
+                return False
+            if node.func.id not in _ALLOWED_NAMES:
+                return False
+        elif isinstance(node, ast.Name):
+            if node.id not in _ALLOWED_NAMES:
+                return False
+        elif isinstance(node, ast.Constant):
+            # int, float, str literals are fine
+            if not isinstance(node.value, (int, float, str, bool)):
+                return False
+        elif isinstance(node, (ast.Tuple, ast.List)):
+            continue  # children will be visited
+        elif isinstance(node, (ast.Load, ast.Store, ast.Del)):
+            continue  # context nodes
+        else:
+            return False
+    return True
+
 
 # ---------------------------------------------------------------------------
 # pySMT / Z3 imports (lazy so tests can import without a solver present)
@@ -39,8 +104,6 @@ def _try_import_pysmt():
             TRUE, FALSE,
         )
         from pysmt.typing import INT, REAL, BOOL
-        from pysmt.smtlib.printers import SmtPrinter
-        import io
 
         return dict(
             Symbol=Symbol, Int=Int, Real=Real, Bool=Bool,
@@ -51,7 +114,6 @@ def _try_import_pysmt():
             is_sat=is_sat, is_unsat=is_unsat,
             TRUE=TRUE, FALSE=FALSE,
             INT=INT, REAL=REAL, BOOL=BOOL,
-            SmtPrinter=SmtPrinter, io=io,
         )
     except ImportError as exc:
         logger.warning("pySMT not available: %s", exc)
@@ -109,6 +171,17 @@ class SMTChecker:
                 message="No formal_expression provided; skipping SMT check.",
             )
 
+        # Validate expression against whitelist before execution
+        if not _validate_expression(claim.formal_expression):
+            return CheckerResult(
+                checker_type="smt",
+                status="unknown",
+                message=(
+                    "formal_expression contains disallowed constructs; "
+                    "only whitelisted pySMT identifiers are permitted."
+                ),
+            )
+
         pysmt = _get_pysmt()
         if pysmt is None:
             return CheckerResult(
@@ -131,9 +204,9 @@ class SMTChecker:
         pysmt: dict,
     ) -> CheckerResult:
         """Compile and run the SMT query."""
-        # Build a sandbox with pySMT constructors
-        sandbox = {k: v for k, v in pysmt.items()}
-        sandbox.update({"__builtins__": {}})
+        # Build a restricted sandbox: only whitelisted pySMT names, no builtins
+        sandbox: dict[str, Any] = {k: pysmt[k] for k in _ALLOWED_NAMES if k in pysmt}
+        sandbox["__builtins__"] = {}
 
         # Evaluate claim formula
         try:
@@ -146,25 +219,19 @@ class SMTChecker:
                 artifact_ref=None,
             )
 
-        # Evaluate assumption formulae
+        # Evaluate and collect assumption formulae
         assumption_formulae = []
         for asm in assumptions:
+            if not _validate_expression(asm):
+                logger.debug("Skipping assumption with disallowed constructs: %r", asm)
+                continue
             try:
                 f = eval(asm, sandbox)  # noqa: S307
                 assumption_formulae.append(f)
             except Exception as exc:
                 logger.debug("Skipping assumption %r: %s", asm, exc)
 
-        # Collect step-level formalizable expressions
-        step_formulae = []
-        for step in steps:
-            if step.formalizable and step.status == "accepted":
-                for fc in []:  # placeholder: step-level expressions not yet wired
-                    pass
-
-        # Build the negation query: if (assumptions /\ claim) is unsat, the
-        # claim is inconsistent with its assumptions (failed).
-        # If (assumptions /\ NOT claim) is unsat, the claim is entailed (passed).
+        # Build the query
         And_ = pysmt["And"]
         Not_ = pysmt["Not"]
         is_unsat_ = pysmt["is_unsat"]
@@ -172,7 +239,7 @@ class SMTChecker:
 
         full_context = And_(*assumption_formulae) if assumption_formulae else pysmt["TRUE"]
 
-        # Check consistency of claim with context
+        # Check entailment: assumptions => claim (i.e., assumptions /\ NOT claim is unsat)
         try:
             negation = And_(full_context, Not_(claim_formula))
             entailed = is_unsat_(negation)
@@ -184,7 +251,7 @@ class SMTChecker:
             )
 
         # Serialize query for replayability
-        artifact = _serialize_query(claim.formal_expression, assumptions, pysmt)
+        artifact = _serialize_query(claim.formal_expression, assumptions)
 
         if entailed:
             return CheckerResult(
@@ -194,7 +261,7 @@ class SMTChecker:
                 artifact_ref=artifact,
             )
 
-        # Check for outright contradiction (claim is unsatisfiable on its own)
+        # Check for outright contradiction (claim is unsatisfiable with context)
         try:
             plain_unsat = is_unsat_(And_(full_context, claim_formula))
         except Exception as exc:
@@ -214,7 +281,7 @@ class SMTChecker:
                 counterexample=None,
             )
 
-        # SAT but not entailed: the claim is consistent but not proven
+        # SAT but not entailed: a counterexample exists
         try:
             model = get_model_(And_(full_context, Not_(claim_formula)))
             counterexample = _model_to_dict(model) if model else None
@@ -241,7 +308,6 @@ class SMTChecker:
 def _serialize_query(
     formal_expression: str,
     assumptions: list[str],
-    pysmt: dict,
 ) -> str:
     """Return a compact text representation of the SMT query for replay."""
     lines = ["# SMT Query"]

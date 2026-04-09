@@ -43,11 +43,11 @@ class CheckerResult(BaseModel):
 class ReasoningStep(BaseModel):
     step_id: str
     text: str
-    depends_on: list[str] = []
-    evidence_refs: list[str] = []
+    depends_on: list[str] = Field(default_factory=list)
+    evidence_refs: list[str] = Field(default_factory=list)
     formalizable: bool = False
-    critique_labels: list[CritiqueLabel] = []
-    checker_results: list[CheckerResult] = []
+    critique_labels: list[CritiqueLabel] = Field(default_factory=list)
+    checker_results: list[CheckerResult] = Field(default_factory=list)
     status: Literal[
         "pending",
         "accepted",
@@ -58,28 +58,28 @@ class ReasoningStep(BaseModel):
 
 
 class SummaryState(BaseModel):
-    accepted_facts: list[str] = []
-    open_obligations: list[str] = []
-    failed_regions: list[str] = []
-    best_partial_solutions: list[str] = []
-    abandoned_paths: list[str] = []
+    accepted_facts: list[str] = Field(default_factory=list)
+    open_obligations: list[str] = Field(default_factory=list)
+    failed_regions: list[str] = Field(default_factory=list)
+    best_partial_solutions: list[str] = Field(default_factory=list)
+    abandoned_paths: list[str] = Field(default_factory=list)
 
 
 class ReasoningTrace(BaseModel):
     task_id: str
     goal: str
-    assumptions: list[str] = []
-    steps: list[ReasoningStep] = []
-    formal_claims: list[FormalClaim] = []
+    assumptions: list[str] = Field(default_factory=list)
+    steps: list[ReasoningStep] = Field(default_factory=list)
+    formal_claims: list[FormalClaim] = Field(default_factory=list)
     summary_state: SummaryState = Field(default_factory=SummaryState)
 
 
 class TaskInput(BaseModel):
     task_id: str
     goal: str
-    context: dict = {}
-    constraints: list[str] = []
-    evidence: list[dict] = []
+    context: dict = Field(default_factory=dict)
+    constraints: list[str] = Field(default_factory=list)
+    evidence: list[dict] = Field(default_factory=list)
     require_formal_proof: bool = False
     require_symbolic_checking: bool = True
     max_iterations: int = 6
