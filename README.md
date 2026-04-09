@@ -46,6 +46,8 @@ python - <<'PY'
 from agentic_validation import TaskInput, run_agent
 
 result = run_agent(TaskInput(task_id="demo", goal="Verify a reasoning trace"))
+print(result.verification_status)
+print(result.final_answer)
 print(result.model_dump())
 PY
 ```
