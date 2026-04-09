@@ -49,7 +49,7 @@ from agentic_validation import TaskInput, run_agent
 # including context, constraints, evidence, require_formal_proof,
 # require_symbolic_checking, max_iterations, and max_branches; see
 # src/agentic_validation/schemas.py for the current defaults.
-result = run_agent(TaskInput(task_id="demo", goal="Verify a reasoning trace"))
+result = run_agent(TaskInput(task_id="demo", goal="Validate that x > 5 implies x + 1 > 6"))
 print(result.verification_status)
 print(result.final_answer)
 print(result.model_dump())
