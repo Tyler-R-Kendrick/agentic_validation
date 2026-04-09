@@ -54,12 +54,17 @@ def log_run_start(
     task_input: Any,
     db_path: Path = _DEFAULT_DB,
 ) -> None:
-    """Persist a new run record."""
+    """Persist a new run record.
+
+    Raises ``ValueError`` if a run with the same *run_id* already exists so
+    that duplicate IDs are surfaced immediately rather than silently overwriting
+    existing data.
+    """
     with _LOCK:
         conn = _get_connection(db_path)
-        conn.execute(
+        cursor = conn.execute(
             """
-            INSERT OR REPLACE INTO runs (run_id, task_id, created_at, status, input_json)
+            INSERT INTO runs (run_id, task_id, created_at, status, input_json)
             VALUES (?, ?, ?, 'running', ?)
             """,
             (
@@ -69,6 +74,9 @@ def log_run_start(
                 _dump(task_input),
             ),
         )
+        if cursor.rowcount == 0:
+            conn.close()
+            raise ValueError(f"A run with run_id={run_id!r} already exists.")
         conn.commit()
         conn.close()
 

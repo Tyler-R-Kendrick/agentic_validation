@@ -310,7 +310,16 @@ class RepairModule(dspy.Module):
         checker_feedback: list[Any],
         summary_state: SummaryState,
         local_objective: str,
-    ) -> list[ReasoningStep]:
+    ) -> tuple[list[ReasoningStep], list[FormalClaim]]:
+        """Repair the *failed_steps* region.
+
+        Returns
+        -------
+        tuple[list[ReasoningStep], list[FormalClaim]]
+            A pair of (repaired_steps, updated_formal_claims).  The caller is
+            responsible for splicing the repaired steps back into the trace and
+            replacing any stale FormalClaim objects with the returned ones.
+        """
         accepted_context = {
             "accepted_steps": [s.model_dump() for s in accepted_steps],
             "assumptions": assumptions,
@@ -324,19 +333,28 @@ class RepairModule(dspy.Module):
                 local_objective=local_objective,
             )
             raw = _extract_json(result.repair_json)
-            repaired = raw.get("repaired_steps", [])
+            repaired_raw = raw.get("repaired_steps", [])
             steps = []
-            for i, (orig, rep) in enumerate(zip(failed_steps, repaired)):
+            for orig, rep in zip(failed_steps, repaired_raw):
                 merged = orig.model_dump()
                 merged.update(rep)
                 merged["status"] = "repaired"
                 steps.append(ReasoningStep.model_validate(merged))
-            # If fewer repaired steps returned, keep originals for the rest
-            for orig in failed_steps[len(repaired):]:
+            # Preserve original (still-failed) steps if the LM returned fewer
+            for orig in failed_steps[len(repaired_raw):]:
                 d = orig.model_dump()
                 d["status"] = "failed"
                 steps.append(ReasoningStep.model_validate(d))
-            return steps
+
+            # Consume updated_formal_claims if the LM produced any
+            claims: list[FormalClaim] = []
+            for raw_claim in raw.get("updated_formal_claims", []):
+                try:
+                    claims.append(FormalClaim.model_validate(raw_claim))
+                except Exception as claim_exc:
+                    logger.debug("Skipping malformed updated_formal_claim: %s", claim_exc)
+
+            return steps, claims
         except Exception as exc:
             logger.warning("RepairModule fallback: %s", exc)
             result_steps = []
@@ -344,7 +362,7 @@ class RepairModule(dspy.Module):
                 d = s.model_dump()
                 d["status"] = "failed"
                 result_steps.append(ReasoningStep.model_validate(d))
-            return result_steps
+            return result_steps, []
 
 
 class AggregatorModule(dspy.Module):
@@ -401,24 +419,29 @@ class GateModule(dspy.Module):
 
 
 def _extract_json(raw: str) -> Any:
-    """Extract the first valid JSON value from a (possibly prose-wrapped) string."""
+    """Extract the first valid JSON value from a (possibly prose-wrapped) string.
+
+    Uses ``JSONDecoder.raw_decode`` starting at the first ``{`` or ``[`` so
+    that only the first complete JSON value is consumed, even when the model
+    output contains multiple objects or trailing prose.
+    """
     raw = raw.strip()
-    # Try direct parse first
+    # Try direct parse first (fast path for clean output)
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
         pass
-    # Find the first { or [
-    for start_char, end_char in (("{", "}"), ("[", "]")):
-        idx = raw.find(start_char)
-        if idx != -1:
-            # Find matching closing delimiter (naive: last occurrence)
-            ridx = raw.rfind(end_char)
-            if ridx > idx:
-                try:
-                    return json.loads(raw[idx : ridx + 1])
-                except json.JSONDecodeError:
-                    pass
+
+    decoder = json.JSONDecoder()
+    for idx, char in enumerate(raw):
+        if char not in "{[":
+            continue
+        try:
+            value, _ = decoder.raw_decode(raw, idx)
+            return value
+        except json.JSONDecodeError:
+            continue
+
     raise ValueError(f"No JSON found in: {raw!r}")
 
 

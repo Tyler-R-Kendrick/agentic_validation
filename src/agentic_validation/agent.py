@@ -32,8 +32,6 @@ Control-flow follows the pseudocode in the problem statement exactly:
 
 from __future__ import annotations
 
-import copy
-import json
 import logging
 import uuid
 from pathlib import Path
@@ -145,7 +143,7 @@ def run_agent(task: TaskInput) -> AgentResult:
             checker_feedback = _collect_checker_feedback(region)
             local_obj = f"Fix step '{step_id}' so that: {region.text}"
 
-            candidate_steps = repairer.repair(
+            candidate_steps, updated_claims = repairer.repair(
                 failed_steps=[region],
                 accepted_steps=accepted,
                 assumptions=assumptions,
@@ -154,8 +152,11 @@ def run_agent(task: TaskInput) -> AgentResult:
                 local_objective=local_obj,
             )
 
-            # Build a candidate trace with the repaired step(s)
+            # Build a candidate trace with the repaired step(s); splice in any
+            # LM-produced updated_formal_claims so they replace stale entries.
             candidate = _splice_steps(trace, [region], candidate_steps)
+            if updated_claims:
+                _apply_updated_claims(candidate, updated_claims)
             candidate = _critique_all(candidate, critic, run_id)
             candidate = _formalize_all(candidate, formalizer, task, run_id)
             candidate, new_art = _run_checks(candidate, smt_checker, lean_checker, task, run_id)
@@ -243,7 +244,11 @@ def _critique_all(
             step.status = "pending"
         else:
             step.status = "accepted"
-        accepted_so_far.append(step)
+        # Only include this step in the context for subsequent steps if it
+        # actually passed critique; failed/pending steps must not pollute the
+        # accepted context used by later steps.
+        if step.status in ("accepted", "repaired"):
+            accepted_so_far.append(step)
 
     # Global critique
     global_critique = critic.critique_trace(trace)
@@ -262,13 +267,29 @@ def _formalize_all(
     task: TaskInput,
     run_id: str,
 ) -> ReasoningTrace:
-    """Create FormalClaim objects for all formalizable steps not yet claimed."""
-    existing_source_ids = {fc.source_step_id for fc in trace.formal_claims}
+    """Create/refresh FormalClaim objects for the current set of formalizable steps.
+
+    This re-synchronizes step-derived claims with the current trace state on
+    every call so repaired or reclassified steps do not retain stale FormalClaim
+    entries from earlier iterations.
+    """
+    current_step_ids = {step.step_id for step in trace.steps}
+
+    # Preserve claims that are not sourced from any current step (e.g. global
+    # claims added externally).
+    preserved_claims = [
+        fc for fc in trace.formal_claims if fc.source_step_id not in current_step_ids
+    ]
+
+    refreshed_claims: list[FormalClaim] = []
     for step in trace.steps:
-        if step.formalizable and step.step_id not in existing_source_ids:
-            claim = formalizer.formalize(step, task.goal)
-            trace.formal_claims.append(claim)
-            log_event(run_id, "claim_formalized", claim.model_dump(), _DB_PATH)
+        if not step.formalizable:
+            continue
+        claim = formalizer.formalize(step, task.goal)
+        refreshed_claims.append(claim)
+        log_event(run_id, "claim_formalized", claim.model_dump(), _DB_PATH)
+
+    trace.formal_claims = preserved_claims + refreshed_claims
     return trace
 
 
@@ -283,9 +304,20 @@ def _run_checks(
     artifacts: list[dict] = []
     step_map = {s.step_id: s for s in trace.steps}
 
+    # Reset previously-resolved claims that belong to repaired steps so that
+    # they are re-evaluated with fresh context.
+    repaired_ids = {s.step_id for s in trace.steps if s.status == "repaired"}
+    for claim in trace.formal_claims:
+        if claim.source_step_id in repaired_ids and claim.status in ("passed", "failed"):
+            claim.status = "pending"
+            # Clear stale checker results from the source step as well.
+            src_step = step_map.get(claim.source_step_id)
+            if src_step is not None:
+                src_step.checker_results = []
+
     for claim in trace.formal_claims:
         if claim.status in ("passed", "failed"):
-            continue  # already resolved
+            continue  # already resolved (and not repaired)
 
         accepted_steps = [s for s in trace.steps if s.status in ("accepted", "repaired")]
 
@@ -332,6 +364,24 @@ def _run_checks(
 # ---------------------------------------------------------------------------
 # Region helpers
 # ---------------------------------------------------------------------------
+
+
+def _apply_updated_claims(
+    trace: ReasoningTrace,
+    updated_claims: list[FormalClaim],
+) -> None:
+    """Replace or insert FormalClaim entries based on LM-produced updates.
+
+    For each updated claim, any existing claim with the same ``claim_id`` is
+    replaced; new claim_ids are appended.
+    """
+    updated_by_id = {c.claim_id: c for c in updated_claims}
+    trace.formal_claims = [
+        updated_by_id.pop(fc.claim_id, fc) for fc in trace.formal_claims
+    ]
+    # Append any brand-new claims the LM produced
+    trace.formal_claims.extend(updated_by_id.values())
+
 
 
 def _find_failing_regions(trace: ReasoningTrace) -> list[ReasoningStep]:
