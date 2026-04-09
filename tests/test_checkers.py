@@ -445,8 +445,22 @@ class TestLeanChecker:
             return f"/usr/bin/{name}" if name == "lake" else None
 
         monkeypatch.setattr("agentic_validation.checkers.lean_checker.shutil.which", _which)
+        monkeypatch.setattr(
+            "agentic_validation.checkers.lean_checker._has_lake_project_file", lambda: True
+        )
 
         assert self.checker._resolve_command() == ["lake", "env", "lean"]
+
+    def test_resolve_command_skips_lake_without_project_file(self, monkeypatch):
+        def _which(name):
+            return f"/usr/bin/{name}"
+
+        monkeypatch.setattr("agentic_validation.checkers.lean_checker.shutil.which", _which)
+        monkeypatch.setattr(
+            "agentic_validation.checkers.lean_checker._has_lake_project_file", lambda: False
+        )
+
+        assert self.checker._resolve_command() == ["lean"]
 
     def test_resolve_command_uses_explicit_command(self):
         checker = LeanChecker(command=["custom", "lean"])
@@ -470,6 +484,9 @@ class TestLeanChecker:
 
         assert result.status == "unknown"
         assert "boom" in result.message
+        artifact = json.loads(result.artifact_ref)
+        assert artifact["command"] == ["lean"]
+        assert artifact["stderr"] == "boom"
 
     def test_normalize_bytes_and_binder_detection(self):
         artifact = smt_checker_module  # keep import usage local for lint
@@ -479,6 +496,31 @@ class TestLeanChecker:
         assert _looks_like_binder("n : ℕ") is True
         assert _looks_like_binder("plain proposition") is False
         assert _normalize_output(b"\xe2\x9c\x93") == "✓"
+
+    def test_sanitize_identifier_strips_unsafe_chars(self):
+        from agentic_validation.checkers.lean_checker import _sanitize_identifier
+
+        assert _sanitize_identifier("c-1") == "c_1"
+        assert _sanitize_identifier("../../etc/passwd") == "etc_passwd"
+        assert _sanitize_identifier("a b c") == "a_b_c"
+        assert _sanitize_identifier("---") == "anonymous"
+        assert _sanitize_identifier("") == "anonymous"
+        assert _sanitize_identifier("valid_id") == "valid_id"
+
+    def test_has_lake_project_file(self, tmp_path, monkeypatch):
+        from agentic_validation.checkers.lean_checker import _has_lake_project_file
+
+        monkeypatch.chdir(tmp_path)
+        assert _has_lake_project_file() is False
+
+        (tmp_path / "lakefile.lean").write_text("")
+        assert _has_lake_project_file() is True
+
+    def test_theorem_sanitizes_claim_id(self):
+        claim = _claim(target="lean", claim_id="../../evil", expression="True")
+        theorem = self.checker._build_theorem(claim, [], [])
+        assert "claim_evil" in theorem
+        assert ".." not in theorem
 
     def test_subclass_override(self):
         """Subclassing and overriding _invoke_lean should work correctly."""

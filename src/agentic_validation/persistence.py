@@ -23,29 +23,31 @@ def init_db(db_path: Path = _DEFAULT_DB) -> None:
     """Create the schema if it does not exist."""
     with _LOCK:
         conn = _get_connection(db_path)
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS runs (
-                run_id      TEXT PRIMARY KEY,
-                task_id     TEXT NOT NULL,
-                created_at  TEXT NOT NULL,
-                status      TEXT,
-                input_json  TEXT,
-                result_json TEXT
-            );
+        try:
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS runs (
+                    run_id      TEXT PRIMARY KEY,
+                    task_id     TEXT NOT NULL,
+                    created_at  TEXT NOT NULL,
+                    status      TEXT,
+                    input_json  TEXT,
+                    result_json TEXT
+                );
 
-            CREATE TABLE IF NOT EXISTS events (
-                event_id    INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id      TEXT NOT NULL,
-                event_type  TEXT NOT NULL,
-                timestamp   TEXT NOT NULL,
-                payload     TEXT NOT NULL,
-                FOREIGN KEY (run_id) REFERENCES runs(run_id)
-            );
-            """
-        )
-        conn.commit()
-        conn.close()
+                CREATE TABLE IF NOT EXISTS events (
+                    event_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id      TEXT NOT NULL,
+                    event_type  TEXT NOT NULL,
+                    timestamp   TEXT NOT NULL,
+                    payload     TEXT NOT NULL,
+                    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+                );
+                """
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def log_run_start(
@@ -76,10 +78,11 @@ def log_run_start(
                 ),
             )
         except sqlite3.IntegrityError as exc:
-            conn.close()
             raise ValueError(f"A run with run_id={run_id!r} already exists.") from exc
-        conn.commit()
-        conn.close()
+        else:
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def log_event(
@@ -91,15 +94,17 @@ def log_event(
     """Append a structured event to the events log."""
     with _LOCK:
         conn = _get_connection(db_path)
-        conn.execute(
-            """
-            INSERT INTO events (run_id, event_type, timestamp, payload)
-            VALUES (?, ?, ?, ?)
-            """,
-            (run_id, event_type, _now(), _dump(payload)),
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(
+                """
+                INSERT INTO events (run_id, event_type, timestamp, payload)
+                VALUES (?, ?, ?, ?)
+                """,
+                (run_id, event_type, _now(), _dump(payload)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def log_run_end(
@@ -111,24 +116,28 @@ def log_run_end(
     """Update the run record with the final result."""
     with _LOCK:
         conn = _get_connection(db_path)
-        conn.execute(
-            """
-            UPDATE runs SET status = ?, result_json = ? WHERE run_id = ?
-            """,
-            (status, _dump(result), run_id),
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(
+                """
+                UPDATE runs SET status = ?, result_json = ? WHERE run_id = ?
+                """,
+                (status, _dump(result), run_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def get_run(run_id: str, db_path: Path = _DEFAULT_DB) -> dict | None:
     """Retrieve a persisted run by ID."""
     with _LOCK:
         conn = _get_connection(db_path)
-        row = conn.execute(
-            "SELECT * FROM runs WHERE run_id = ?", (run_id,)
-        ).fetchone()
-        conn.close()
+        try:
+            row = conn.execute(
+                "SELECT * FROM runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+        finally:
+            conn.close()
     if row is None:
         return None
     return dict(row)
@@ -138,10 +147,12 @@ def get_events(run_id: str, db_path: Path = _DEFAULT_DB) -> list[dict]:
     """Retrieve all events for a run, in order."""
     with _LOCK:
         conn = _get_connection(db_path)
-        rows = conn.execute(
-            "SELECT * FROM events WHERE run_id = ? ORDER BY event_id", (run_id,)
-        ).fetchall()
-        conn.close()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM events WHERE run_id = ? ORDER BY event_id", (run_id,)
+            ).fetchall()
+        finally:
+            conn.close()
     return [dict(r) for r in rows]
 
 

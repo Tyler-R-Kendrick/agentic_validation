@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 import subprocess
 import tempfile
@@ -70,10 +71,11 @@ class LeanChecker:
             premise_lines.append(f"  ({hypothesis_name} : {stripped})")
             hypothesis_names.append(hypothesis_name)
 
+        safe_id = _sanitize_identifier(claim.claim_id)
         theorem_header = [
             "set_option autoImplicit false",
             "",
-            f"theorem claim_{claim.claim_id.replace('-', '_')}",
+            f"theorem claim_{safe_id}",
             *premise_lines,
             f"  : {claim.formal_expression} := by",
         ]
@@ -93,7 +95,8 @@ class LeanChecker:
 
         try:
             with tempfile.TemporaryDirectory(prefix="agentic-validation-lean-") as temp_dir:
-                theorem_path = Path(temp_dir) / f"{claim.claim_id}.lean"
+                safe_filename = _sanitize_identifier(claim.claim_id)
+                theorem_path = Path(temp_dir) / f"{safe_filename}.lean"
                 theorem_path.write_text(theorem_statement, encoding="utf-8")
                 completed = subprocess.run(
                     [*command, str(theorem_path)],
@@ -121,6 +124,13 @@ class LeanChecker:
                 checker_type="lean",
                 status="unknown",
                 message=f"Lean invocation failed: {exc}",
+                artifact_ref=_serialize_artifact(
+                    command=command,
+                    theorem_statement=theorem_statement,
+                    returncode=None,
+                    stdout=None,
+                    stderr=str(exc),
+                ),
             )
 
         artifact = _serialize_artifact(
@@ -168,7 +178,7 @@ class LeanChecker:
         """Return the best available Lean command."""
         if self.command is not None:
             return list(self.command)
-        if shutil.which("lake"):
+        if shutil.which("lake") and _has_lake_project_file():
             return ["lake", "env", "lean"]
         if shutil.which("lean"):
             return ["lean"]
@@ -181,6 +191,24 @@ def _looks_like_binder(assumption: str) -> bool:
     head, _, _ = assumption.partition(":")
     head = head.strip()
     return bool(head) and all(part.isidentifier() for part in head.split())
+
+
+def _sanitize_identifier(raw: str) -> str:
+    """Return a string safe for use as a Lean identifier and filename component.
+
+    Replaces non-alphanumeric/underscore characters with underscores,
+    collapses runs of underscores, and strips leading/trailing underscores.
+    Falls back to ``"anonymous"`` if nothing remains.
+    """
+    sanitized = re.sub(r"[^A-Za-z0-9_]", "_", raw)
+    sanitized = re.sub(r"_+", "_", sanitized).strip("_")
+    return sanitized or "anonymous"
+
+
+def _has_lake_project_file() -> bool:
+    """Return True when the current directory is inside a Lake project."""
+    cwd = Path.cwd()
+    return any((cwd / name).is_file() for name in ("lakefile.lean", "lakefile.toml"))
 
 
 def _serialize_artifact(
