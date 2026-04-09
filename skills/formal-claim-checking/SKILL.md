@@ -68,4 +68,6 @@ If you are inside this repository or the package is installed, prefer the existi
 - `agentic_validation.checkers.SMTChecker`
 - `agentic_validation.checkers.LeanChecker`
 
-Both checker classes expose a `check(claim, assumptions, steps)` method and return a `CheckerResult`. Instantiate the checker, pass the `FormalClaim`, and provide any relevant assumptions or supporting steps explicitly.
+Both checker classes expose a `check(claim, assumptions, steps)` method and
+return a `CheckerResult`. The `claim` argument should be a `FormalClaim`
+instance. Provide any relevant assumptions or supporting steps explicitly.

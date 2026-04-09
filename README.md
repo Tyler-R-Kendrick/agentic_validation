@@ -45,7 +45,9 @@ python -m pip install -e .
 python - <<'PY'
 from agentic_validation import TaskInput, run_agent
 
-# Other TaskInput fields are optional here and fall back to package defaults.
+# Other TaskInput fields are optional here and fall back to package defaults,
+# including context, constraints, evidence, require_formal_proof,
+# require_symbolic_checking, max_iterations, and max_branches.
 result = run_agent(TaskInput(task_id="demo", goal="Verify a reasoning trace"))
 print(result.verification_status)
 print(result.final_answer)
