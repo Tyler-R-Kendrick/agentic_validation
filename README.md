@@ -14,10 +14,10 @@ For local agent discovery inside this repo, `.agents/skills/` contains symlinks 
 
 ### Claude / Agent Skills installs
 
-Install one or both skills by symlinking them into your user or project skill directory:
+From the repository root, install one or both skills by symlinking them into your user or project skill directory:
 
 ```bash
-REPO_ROOT="$(pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
 mkdir -p ~/.claude/skills
 ln -s "$REPO_ROOT/skills/agentic-validation" ~/.claude/skills/agentic-validation
 ln -s "$REPO_ROOT/skills/formal-claim-checking" ~/.claude/skills/formal-claim-checking
@@ -27,7 +27,7 @@ For a project-local install, symlink the same folders into `.claude/skills/` in 
 
 ### Agent discovery inside a repo
 
-Some agent runners discover shared skills from `.agents/skills`. This repository already includes that layout, with symlinks pointing back to the canonical copies under `skills/`. To reproduce the pattern elsewhere:
+Use `.claude/skills/` when you want Claude's built-in skill loader to discover the skills for a user or project. Use `.agents/skills/` when your agent runner scans repository-local agent assets. This repository already includes the `.agents/skills/` layout, with symlinks pointing back to the canonical copies under `skills/`. To reproduce the pattern elsewhere:
 
 ```bash
 mkdir -p .agents/skills
