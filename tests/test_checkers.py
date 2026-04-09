@@ -522,6 +522,26 @@ class TestLeanChecker:
         assert "claim_evil" in theorem
         assert ".." not in theorem
 
+    def test_invoke_lean_sanitizes_filename(self, monkeypatch):
+        """Ensure the .lean file uses the sanitized claim_id, not the raw one."""
+        claim = _claim(target="lean", claim_id="../escape/attempt", expression="True")
+        monkeypatch.setattr(self.checker, "_resolve_command", lambda: ["lean"])
+
+        invoked_args: list[list[str]] = []
+
+        def _fake_run(*args, **kwargs):
+            invoked_args.append(list(args[0]))
+            return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", _fake_run)
+
+        result = self.checker.check(claim, [], [])
+        assert result.status == "passed"
+        # The file path in the subprocess call must use the sanitized name
+        lean_path = invoked_args[0][-1]
+        assert ".." not in lean_path
+        assert lean_path.endswith("escape_attempt.lean")
+
     def test_subclass_override(self):
         """Subclassing and overriding _invoke_lean should work correctly."""
 
