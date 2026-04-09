@@ -1,6 +1,6 @@
 ---
 name: formal-claim-checking
-description: Convert candidate claims into safe SMT or Lean checks, choose the right formalization target, and interpret passed, failed, or unknown results without overclaiming. Use this whenever the user asks for symbolic checking, wants a pySMT or Lean formalization, needs a counterexample-producing validation pass, wants help deciding between SMT and Lean, or needs a formal claim checked before trusting a reasoning step.
+description: Convert candidate claims into safe SMT or Lean checks, choose the right formalization target, and report passed, failed, or unknown results conservatively.
 ---
 
 # Formal Claim Checking

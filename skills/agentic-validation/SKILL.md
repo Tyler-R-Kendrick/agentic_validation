@@ -1,6 +1,6 @@
 ---
 name: agentic-validation
-description: Run a structured reasoning-validation workflow that decomposes a task into trace steps, critiques each step, formalizes objective claims, checks them with SMT or Lean when appropriate, repairs failing regions, and returns a gated answer with verification status. Use this whenever the user wants high-assurance reasoning, wants an answer audited step-by-step, asks to validate a chain of thought or reasoning trace, wants contradiction detection or repair, or needs a final answer labeled as hard_verified, soft_verified, corrected, unverified, or rejected.
+description: Apply the repository's structured reasoning-validation workflow for high-assurance answers, audited reasoning traces, contradiction checks, local repairs, and explicit verification status reporting.
 ---
 
 # Agentic Validation
