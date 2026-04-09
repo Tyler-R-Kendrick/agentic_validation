@@ -41,6 +41,7 @@ If you want to call the packaged agent directly instead of loading the skills in
 
 ```bash
 python -m pip install -e ".[dev]"
+# Run a small inline Python example from the shell.
 python - <<'PY'
 from agentic_validation import TaskInput, run_agent
 
