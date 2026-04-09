@@ -1,6 +1,7 @@
 """Tests for the SMT and Lean checker adapters."""
 
-import pytest
+import subprocess
+from types import SimpleNamespace
 
 from agentic_validation.checkers import LeanChecker, SMTChecker
 from agentic_validation.checkers.smt_checker import _validate_expression
@@ -158,15 +159,15 @@ class TestLeanChecker:
         result = self.checker.check(claim, [], [])
         assert result.status == "unknown"
 
-    def test_stub_returns_unknown_for_lean(self):
-        """The stub should always return unknown for any lean claim."""
+    def test_missing_binary_returns_unknown(self, monkeypatch):
         claim = _claim(
             target="lean",
             expression="∀ n : ℕ, n + 0 = n",
         )
+        monkeypatch.setattr(self.checker, "_resolve_command", lambda: None)
         result = self.checker.check(claim, ["n : ℕ"], [])
         assert result.status == "unknown"
-        assert "stub" in result.message.lower()
+        assert "not available" in result.message.lower()
 
     def test_result_type(self):
         claim = _claim(target="lean", expression="True")
@@ -180,6 +181,65 @@ class TestLeanChecker:
         theorem = self.checker._build_theorem(claim, ["n : ℕ"], [])
         assert "theorem" in theorem
         assert "n + 0 = n" in theorem
+        assert "(n : ℕ)" in theorem
+        assert "first" in theorem
+        assert "simp" in theorem
+
+    def test_successful_lean_run_returns_passed(self, monkeypatch):
+        claim = _claim(target="lean", expression="True")
+        monkeypatch.setattr(self.checker, "_resolve_command", lambda: ["lean"])
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="ok", stderr=""),
+        )
+
+        result = self.checker.check(claim, [], [])
+
+        assert result.status == "passed"
+        assert "verified" in result.message.lower()
+        assert "lean" in (result.artifact_ref or "").lower()
+
+    def test_failed_lean_run_returns_failed(self, monkeypatch):
+        claim = _claim(target="lean", expression="False")
+        monkeypatch.setattr(self.checker, "_resolve_command", lambda: ["lean"])
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *args, **kwargs: SimpleNamespace(
+                returncode=1,
+                stdout="",
+                stderr="unsolved goals",
+            ),
+        )
+
+        result = self.checker.check(claim, [], [])
+
+        assert result.status == "failed"
+        assert "unsolved goals" in result.message
+        assert "returncode" in (result.artifact_ref or "")
+
+    def test_timeout_returns_unknown(self, monkeypatch):
+        claim = _claim(target="lean", expression="True")
+        monkeypatch.setattr(self.checker, "_resolve_command", lambda: ["lean"])
+
+        def _raise_timeout(*args, **kwargs):
+            raise subprocess.TimeoutExpired(cmd=["lean"], timeout=1)
+
+        monkeypatch.setattr(subprocess, "run", _raise_timeout)
+
+        result = self.checker.check(claim, [], [])
+
+        assert result.status == "unknown"
+        assert "timed out" in result.message.lower()
+
+    def test_resolve_command_prefers_lake(self, monkeypatch):
+        def _which(name):
+            return f"/usr/bin/{name}" if name == "lake" else None
+
+        monkeypatch.setattr("agentic_validation.checkers.lean_checker.shutil.which", _which)
+
+        assert self.checker._resolve_command() == ["lake", "env", "lean"]
 
     def test_subclass_override(self):
         """Subclassing and overriding _invoke_lean should work correctly."""
