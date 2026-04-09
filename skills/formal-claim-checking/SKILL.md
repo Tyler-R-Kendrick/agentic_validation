@@ -1,6 +1,6 @@
 ---
 name: formal-claim-checking
-description: Convert candidate claims into safe SMT or Lean checks, choose the right formalization target, and report passed, failed, or unknown results conservatively.
+description: Convert candidate claims into safe SMT or Lean checks and choose the right formalization target. Report passed, failed, or unknown results conservatively.
 ---
 
 # Formal Claim Checking
