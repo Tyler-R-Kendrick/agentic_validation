@@ -18,7 +18,6 @@ from typing import Any
 import dspy
 
 from .schemas import (
-    CheckerResult,
     CritiqueLabel,
     FormalClaim,
     ReasoningStep,
