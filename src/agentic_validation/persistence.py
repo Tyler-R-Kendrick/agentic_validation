@@ -62,21 +62,22 @@ def log_run_start(
     """
     with _LOCK:
         conn = _get_connection(db_path)
-        cursor = conn.execute(
-            """
-            INSERT INTO runs (run_id, task_id, created_at, status, input_json)
-            VALUES (?, ?, ?, 'running', ?)
-            """,
-            (
-                run_id,
-                task_id,
-                _now(),
-                _dump(task_input),
-            ),
-        )
-        if cursor.rowcount == 0:
+        try:
+            conn.execute(
+                """
+                INSERT INTO runs (run_id, task_id, created_at, status, input_json)
+                VALUES (?, ?, ?, 'running', ?)
+                """,
+                (
+                    run_id,
+                    task_id,
+                    _now(),
+                    _dump(task_input),
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
             conn.close()
-            raise ValueError(f"A run with run_id={run_id!r} already exists.")
+            raise ValueError(f"A run with run_id={run_id!r} already exists.") from exc
         conn.commit()
         conn.close()
 

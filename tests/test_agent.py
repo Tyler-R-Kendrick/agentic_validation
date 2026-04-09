@@ -12,15 +12,11 @@ stub fallbacks built into each module.  They validate:
 
 from __future__ import annotations
 
-import os
-import tempfile
-from pathlib import Path
-
 import pytest
 
 import agentic_validation.agent as agent_module
 from agentic_validation.agent import run_agent
-from agentic_validation.persistence import get_events, get_run, init_db
+from agentic_validation.persistence import init_db
 from agentic_validation.schemas import AgentResult, TaskInput
 
 

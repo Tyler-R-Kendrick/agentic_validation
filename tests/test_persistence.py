@@ -45,6 +45,12 @@ class TestPersistence:
         assert run["task_id"] == "task-1"
         assert run["status"] == "running"
 
+    def test_log_run_start_rejects_duplicate_run_id(self, db):
+        log_run_start("run-dup", "task-1", {"goal": "test"}, db)
+
+        with pytest.raises(ValueError):
+            log_run_start("run-dup", "task-1", {"goal": "test"}, db)
+
     def test_log_run_end(self, db):
         log_run_start("run-2", "task-2", {}, db)
         log_run_end("run-2", {"final_answer": "ok"}, "soft_verified", db)

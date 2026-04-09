@@ -35,7 +35,6 @@ from __future__ import annotations
 import logging
 import uuid
 from pathlib import Path
-from typing import Any
 
 from .checkers import LeanChecker, SMTChecker
 from .modules import (
@@ -53,7 +52,6 @@ from .schemas import (
     FormalClaim,
     ReasoningStep,
     ReasoningTrace,
-    SummaryState,
     TaskInput,
 )
 
@@ -237,8 +235,13 @@ def _critique_all(
             continue
         labels = critic.critique_step(step, accepted_so_far, trace.assumptions)
         step.critique_labels = labels
-        log_event(run_id, "step_critiqued", {"step_id": step.step_id, "labels": [l.model_dump() for l in labels]}, _DB_PATH)
-        if any(l.severity == "high" for l in labels):
+        log_event(
+            run_id,
+            "step_critiqued",
+            {"step_id": step.step_id, "labels": [label.model_dump() for label in labels]},
+            _DB_PATH,
+        )
+        if any(label.severity == "high" for label in labels):
             step.status = "failed"
         elif labels:
             step.status = "pending"
@@ -418,8 +421,8 @@ def _region_improved(
     if old_step.status == "failed" and new_step.status != "failed":
         return True
     # Improvement: fewer high-severity labels
-    old_high = sum(1 for l in old_step.critique_labels if l.severity == "high")
-    new_high = sum(1 for l in new_step.critique_labels if l.severity == "high")
+    old_high = sum(1 for label in old_step.critique_labels if label.severity == "high")
+    new_high = sum(1 for label in new_step.critique_labels if label.severity == "high")
     return new_high < old_high
 
 
@@ -550,7 +553,7 @@ def _unresolved_critical_failures(trace: ReasoningTrace) -> bool:
     for step in trace.steps:
         if step.status != "failed":
             continue
-        has_high = any(l.severity == "high" for l in step.critique_labels)
+        has_high = any(label.severity == "high" for label in step.critique_labels)
         has_pass = any(cr.status == "passed" for cr in step.checker_results)
         if has_high and not has_pass:
             return True
