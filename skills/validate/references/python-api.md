@@ -10,7 +10,7 @@ From the repository root:
 python -m pip install -e "."
 ```
 
-If the package is not installed yet, the bundled scripts automatically add `src/` to `sys.path` so they can still import the local package.
+If the package has not been installed, the bundled scripts automatically add `src/` to `sys.path` so they can still import the local package.
 
 ## Public entry points
 

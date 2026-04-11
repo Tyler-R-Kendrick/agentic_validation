@@ -81,4 +81,4 @@ Optional repeated flags:
 - `--assumption "..."`
 - `--step-json /path/to/supporting-steps.json`
 
-The `--step-json` file should contain a JSON array of `ReasoningStep` objects when you want checker context to include supporting steps.
+The `--step-json` file should contain a JSON array (`[...]`) of `ReasoningStep` objects when you want checker context to include supporting steps.
