@@ -22,7 +22,7 @@ If the package has not been installed, the bundled scripts automatically add `sr
 
 `run_agent(task: TaskInput) -> AgentResult` runs the repository's full loop:
 
-1. generate trace
+1. Generate trace
 2. critique steps and global consistency
 3. formalize claims
 4. run SMT and Lean checks

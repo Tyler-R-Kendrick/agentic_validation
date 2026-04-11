@@ -11,6 +11,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SRC_PATH = REPO_ROOT / "src"
+# Allow the bundled script to import the local package before editable install.
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
