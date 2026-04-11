@@ -28,9 +28,9 @@ def _load_task(args: argparse.Namespace) -> TaskInput:
     payload: dict[str, Any] = {
         "task_id": args.task_id or "validate-task",
         "goal": args.goal,
-        "context": args.context,
+        "context": {"notes": args.context} if args.context else {},
         "constraints": args.constraint or [],
-        "evidence": args.evidence or [],
+        "evidence": [{"text": item} for item in (args.evidence or [])],
         "require_formal_proof": args.require_formal_proof,
         "require_symbolic_checking": args.require_symbolic_checking,
         "max_iterations": args.max_iterations,
