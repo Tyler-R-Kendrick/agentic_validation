@@ -1,6 +1,6 @@
 ---
 name: validate
-description: Use this skill whenever the user wants a reasoning trace, answer, derivation, or claim checked before it is trusted. It covers the repository's full validation loop, direct SMT or Lean claim checking, explicit verification-status reporting, and replayable checker artifacts, so trigger it for requests to validate, verify, audit, formalize, stress-test, or repair reasoning instead of answering unchecked.
+description: Use this skill for high-assurance validation of reasoning, claims, and proof sketches with the repository's full workflow or direct SMT/Lean checks.
 ---
 
 # Validate
