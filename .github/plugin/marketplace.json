@@ -1,0 +1,20 @@
+{
+  "name": "agentic-validation-marketplace",
+  "metadata": {
+    "description": "GitHub Copilot Plugin marketplace for agentic_validation — high-assurance validation of AI reasoning traces.",
+    "version": "1.0.0"
+  },
+  "owner": {
+    "name": "Tyler R. Kendrick",
+    "url": "https://github.com/Tyler-R-Kendrick/agentic_validation"
+  },
+  "plugins": [
+    {
+      "name": "agentic-validation",
+      "description": "Validate AI/agent outputs and reasoning traces with structured reasoning, SMT, and Lean proof checking.",
+      "version": "0.1.0",
+      "source": ".",
+      "skills": ["skills/"]
+    }
+  ]
+}

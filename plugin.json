@@ -1,0 +1,14 @@
+{
+  "name": "agentic-validation",
+  "description": "High-assurance validation of agent/AI outputs and reasoning traces via structured reasoning, SMT, and Lean proof checking.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Tyler R. Kendrick",
+    "url": "https://github.com/Tyler-R-Kendrick/agentic_validation"
+  },
+  "homepage": "https://github.com/Tyler-R-Kendrick/agentic_validation",
+  "repository": "https://github.com/Tyler-R-Kendrick/agentic_validation",
+  "license": "MIT",
+  "keywords": ["validation", "reasoning", "smt", "lean", "formal-verification", "ai-safety"],
+  "skills": "skills/"
+}
