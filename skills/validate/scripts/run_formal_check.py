@@ -53,7 +53,7 @@ def main() -> int:
     parser.add_argument("--claim-text", help="Human-readable claim text")
     parser.add_argument(
         "--target",
-        choices=["smt", "lean", "none"],
+        choices=["smt", "lean"],
         help="Formalization target when not using --claim-json",
     )
     parser.add_argument("--expression", help="Formal expression for the claim")

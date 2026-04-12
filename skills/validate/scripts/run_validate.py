@@ -33,10 +33,13 @@ def _load_task(args: argparse.Namespace) -> TaskInput:
         "constraints": args.constraint or [],
         "evidence": [{"text": item} for item in (args.evidence or [])],
         "require_formal_proof": args.require_formal_proof,
-        "require_symbolic_checking": args.require_symbolic_checking,
-        "max_iterations": args.max_iterations,
-        "max_branches": args.max_branches,
     }
+    if args.require_symbolic_checking is not None:
+        payload["require_symbolic_checking"] = args.require_symbolic_checking
+    if args.max_iterations is not None:
+        payload["max_iterations"] = args.max_iterations
+    if args.max_branches is not None:
+        payload["max_branches"] = args.max_branches
     return TaskInput.model_validate(payload)
 
 
@@ -55,11 +58,12 @@ def main() -> int:
     )
     parser.add_argument(
         "--require-symbolic-checking",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="Require SMT/Lean symbolic checking",
     )
-    parser.add_argument("--max-iterations", type=int, default=3, help="Maximum repair iterations")
-    parser.add_argument("--max-branches", type=int, default=2, help="Maximum escalation branches")
+    parser.add_argument("--max-iterations", type=int, help="Maximum repair iterations")
+    parser.add_argument("--max-branches", type=int, help="Maximum escalation branches")
     parser.add_argument("--output", help="Optional path to write the AgentResult JSON")
     args = parser.parse_args()
 

@@ -58,7 +58,7 @@ PY
 The merged skill includes scripts that reuse the repository's Python package modules directly:
 
 ```bash
-python skills/validate/scripts/run_validate.py --goal "Validate that x > 5 implies x + 1 > 6"
+python skills/validate/scripts/run_validate.py --goal "Validate that x > 5 implies x + 1 > 6" --require-symbolic-checking
 python skills/validate/scripts/run_formal_check.py \
   --claim-id claim-1 \
   --claim-text "x > 5 implies x + 1 > 6" \
