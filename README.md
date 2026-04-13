@@ -1,6 +1,8 @@
-# agentic_validation
+# Agentic Validation
 
 High-assurance validation of agent/AI outputs and reasoning traces, delivered as a **GitHub Copilot Plugin**, consumable **skills**, and a Python package.
+
+This project utilizes state-of-the-art techniques to enhance reasoning traces with explicit validation steps for llms and agents.
 
 ## Quick start: consume the plugin or skill
 
